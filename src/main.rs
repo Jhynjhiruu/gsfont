@@ -77,8 +77,14 @@ fn extract(data: &[u8], vram: u32, num_chars: usize) -> Result<Vec<u8>> {
     let mut font: Vec<u8> = vec![];
 
     for chunk in offsets.chunks(9).collect::<Vec<_>>().chunks(2) {
-        if let [block, _] = chunk {
+        if let [block, shadow] = chunk {
             for offset in &block[..8] {
+                cursor.set_position(*offset as u64);
+                if let Some(l) = parse_function(&mut cursor)? {
+                    font.extend(l.iter());
+                }
+            }
+            for offset in &shadow[..8] {
                 cursor.set_position(*offset as u64);
                 if let Some(l) = parse_function(&mut cursor)? {
                     font.extend(l.iter());
