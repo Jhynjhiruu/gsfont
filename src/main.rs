@@ -63,13 +63,13 @@ fn build_function(row: u8, double: bool) -> String {
             match pair {
                 0b00 => {}
                 0b01 => {
+                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
+                }
+                0b10 => {
                     rv += &format!(
                         "    sh     s1, {}(a1)\n",
                         (i + 1) * size_of::<Pixel>() as u32
                     );
-                }
-                0b10 => {
-                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
                 }
                 0b11 => {
                     rv += &format!("    sw     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
@@ -80,13 +80,13 @@ fn build_function(row: u8, double: bool) -> String {
             match pair {
                 0b00 => {}
                 0b01 => {
+                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
+                }
+                0b10 => {
                     rv += &format!(
                         "    sh     s1, {}(a1)\n",
                         (i + 1) * size_of::<Pixel>() as u32
                     );
-                }
-                0b10 => {
-                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
                 }
                 0b11 => {
                     rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
