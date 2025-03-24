@@ -218,10 +218,23 @@ where
                 let w = instr & 0xFC000000 == 0xAC000000;
                 let offset = instr & 0x0000FFFF;
                 if w {
-                    pixels[(offset >> 1) as usize] = 0x7F;
-                    pixels[((offset >> 1) + 1) as usize] = 0x7F;
+                    if pixels[(offset >> 1) as usize] == 0 {
+                        pixels[(offset >> 1) as usize] = 0x7F;
+                    } else {
+                        pixels[(offset >> 1) as usize] = 0xBF;
+                    }
+
+                    if pixels[((offset >> 1) + 1) as usize] == 0 {
+                        pixels[((offset >> 1) + 1) as usize] = 0x7F;
+                    } else {
+                        pixels[((offset >> 1) + 1) as usize] = 0xBF;
+                    }
                 } else {
-                    pixels[(offset >> 1) as usize] = 0xFF;
+                    if pixels[(offset >> 1) as usize] == 0 {
+                        pixels[(offset >> 1) as usize] = 0xFF;
+                    } else {
+                        pixels[(offset >> 1) as usize] = 0xBF;
+                    }
                 }
             }
             Ok(Some(pixels.into_boxed_slice()))
