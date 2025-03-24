@@ -110,9 +110,11 @@ fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
     for ch in &odd {
         let mut o = vec![];
         for i in ch {
-            if !odd_rows.contains(i) && !extra_rows.contains(i) {
-                extra_rows.push(*i);
+            if !odd_rows.contains(i) {
                 o.push(format!("row_extra_{i:08b}"));
+                if !extra_rows.contains(i) {
+                    extra_rows.push(*i);
+                }
             } else {
                 o.push(format!("row_odd_{i:08b}"));
             }
@@ -137,9 +139,11 @@ fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
     for ch in &even {
         let mut e = vec![];
         for i in ch {
-            if !even_rows.contains(i) && !extra_rows.contains(i) {
-                extra_rows.push(*i);
+            if !even_rows.contains(i) {
                 e.push(format!("row_extra_{i:08b}"));
+                if !extra_rows.contains(i) {
+                    extra_rows.push(*i);
+                }
             } else {
                 e.push(format!("row_even_{i:08b}"));
             }
