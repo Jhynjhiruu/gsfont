@@ -26,6 +26,9 @@ struct Args {
 
     /// Output file
     outfile: PathBuf,
+
+    /// Extra lines path
+    extra: PathBuf,
 }
 
 #[derive(Subcommand)]
@@ -37,6 +40,10 @@ enum Command {
 
         /// Label for the second part of the table
         second_label: String,
+
+        /// Matching build (using provided extra lines and patches)
+        #[arg(short, long)]
+        matching: bool,
     },
 
     /// Extract a font table to an image
@@ -48,10 +55,14 @@ enum Command {
         /// Number of characters in the table
         #[arg(value_parser = maybe_hex::<usize>)]
         num_chars: usize,
+
+        /// Offset of duplicate extra data
+        #[arg(value_parser = maybe_hex::<usize>)]
+        extra_offset: usize,
     },
 }
 
-fn build_function(row: u8, double: bool) -> String {
+fn build_function(row: u8, double: bool, matching: bool) -> String {
     let mut rv = String::new();
 
     rv += "    lw     s0, 0(a0)\n";
@@ -89,7 +100,12 @@ fn build_function(row: u8, double: bool) -> String {
                     rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
                 }
                 0b11 => {
-                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
+                    if matching && row == 0b11011000 && i == 0 {
+                        // SURELY this must have been a manual patch
+                        rv += &format!("    sw     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
+                    } else {
+                        rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
+                    }
                     rv += &format!(
                         "    sh     s1, {}(a1)\n",
                         (i + 1) * size_of::<Pixel>() as u32
@@ -109,7 +125,12 @@ fn build_function(row: u8, double: bool) -> String {
     rv
 }
 
-fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
+fn build(
+    data: &[u8],
+    first_label: &str,
+    second_label: &str,
+    extra: Option<&[u8]>,
+) -> Result<String> {
     let mut rv = String::from(PROLOGUE);
 
     let mut char_rows = vec![];
@@ -137,35 +158,33 @@ fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
 
     let mut extra_rows = vec![];
 
-    let mut single_strings = vec![];
-    let mut double_strings = vec![];
+    if let Some(e) = extra {
+        for row in e.chunks_exact(8) {
+            let mut b = 0;
 
-    for ch in &char_rows {
-        let mut single_row = vec![];
-        let mut double_row = vec![];
-        for i in ch {
-            if !rows.contains(i) {
-                single_row.push(format!("row_extra_{i:08b}"));
-                double_row.push(format!("row_extra_{i:08b}"));
-                if !extra_rows.contains(i) {
-                    extra_rows.push(*i);
-                }
-            } else {
-                single_row.push(format!("row_single_{i:08b}"));
-                double_row.push(format!("row_double_{i:08b}"));
+            for i in row {
+                b = (b << 1) | (*i != 0) as u8;
             }
+
+            extra_rows.push(b);
         }
-        single_strings.push(single_row);
-        double_strings.push(double_row);
     }
 
-    for (index, (o, e)) in single_strings.iter().zip(&double_strings).enumerate() {
+    for ch in &char_rows {
+        for i in ch {
+            if !rows.contains(i) && !extra_rows.contains(i) {
+                extra_rows.push(*i);
+            }
+        }
+    }
+
+    for (index, row) in char_rows.iter().enumerate() {
         if index == 0 {
             rv += &format!("EXPORT({})\n", first_label);
         }
 
-        for i in o {
-            rv += &format!("    .word {i}\n");
+        for i in row {
+            rv += &format!("    .word row_single_{i:08b}\n");
         }
 
         rv += "    .word row_end\n\n";
@@ -174,8 +193,8 @@ fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
             rv += &format!("EXPORT({})\n", second_label);
         }
 
-        for i in e {
-            rv += &format!("    .word {i}\n");
+        for i in row {
+            rv += &format!("    .word row_double_{i:08b}\n");
         }
 
         rv += "    .word row_end\n\n";
@@ -184,7 +203,7 @@ fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
     for &i in &rows {
         let name = format!("row_single_{i:08b}");
         rv += &format!("LEAF({name})\n");
-        rv += &build_function(i, false);
+        rv += &build_function(i, false, extra.is_some());
         rv += &format!("END({name})\n\n");
     }
 
@@ -193,14 +212,21 @@ fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
     for &i in &rows {
         let name = format!("row_double_{i:08b}");
         rv += &format!("LEAF({name})\n");
-        rv += &build_function(i, true);
+        rv += &build_function(i, true, extra.is_some());
         rv += &format!("END({name})\n\n");
     }
 
     for &i in &extra_rows {
-        let name = format!("row_extra_{i:08b}");
+        let name = format!("row_double_{i:08b}");
         rv += &format!("LEAF({name})\n");
-        rv += &build_function(i, false);
+        rv += &build_function(i, true, extra.is_some());
+        rv += &format!("END({name})\n\n");
+    }
+
+    for &i in &extra_rows {
+        let name = format!("row_single_{i:08b}");
+        rv += &format!("LEAF({name})\n");
+        rv += &build_function(i, false, extra.is_some());
         rv += &format!("END({name})\n\n");
     }
 
@@ -232,14 +258,28 @@ where
                     pixels[(offset >> 1) as usize] = 0xFF;
                 }
             }
+            // consume epilogue
+            cursor.read_u32::<BE>()?;
             Ok(Some(pixels.into_boxed_slice()))
         }
-        (/* lw $s1, 0($sp) */ 0x8FB10000, /* addi $sp, $sp, 4 */ 0x23BD0004) => Ok(None),
+        (/* lw $s1, 0($sp) */ 0x8FB10000, /* addi $sp, $sp, 4 */ 0x23BD0004) => {
+            // consume epilogue
+            cursor.read_u32::<BE>()?;
+            cursor.read_u32::<BE>()?;
+            cursor.read_u32::<BE>()?;
+            cursor.read_u32::<BE>()?;
+            Ok(None)
+        }
         _ => Ok(None),
     }
 }
 
-fn extract(data: &[u8], vram: u32, num_chars: usize) -> Result<Vec<u8>> {
+fn extract(
+    data: &[u8],
+    vram: u32,
+    num_chars: usize,
+    extra_offset: usize,
+) -> Result<(Vec<u8>, Vec<u8>)> {
     let offsets_len = num_chars * 9 * size_of::<u32>() * 2;
 
     let data_vram = vram + offsets_len as u32;
@@ -266,7 +306,16 @@ fn extract(data: &[u8], vram: u32, num_chars: usize) -> Result<Vec<u8>> {
         }
     }
 
-    Ok(font)
+    let mut extra = vec![];
+
+    cursor.set_position(extra_offset as u64);
+    while (cursor.position() as usize) < data.len() - offsets_len {
+        if let Some(l) = parse_function(&mut cursor)? {
+            extra.extend(l.iter());
+        }
+    }
+
+    Ok((font, extra))
 }
 
 fn main() -> Result<()> {
@@ -276,24 +325,53 @@ fn main() -> Result<()> {
         Command::Build {
             first_label,
             second_label,
+            matching,
         } => {
             let infile = image::open(args.infile)?;
             assert_eq!(infile.width(), 8);
             assert_eq!(infile.height() % 8, 0);
             let bw = infile.to_luma8();
-            let out = build(bw.as_bytes(), &first_label, &second_label)?;
+
+            let extra = if matching {
+                let extra = image::open(args.extra)?;
+                assert_eq!(extra.width(), 8);
+                assert_eq!(extra.height() % 8, 0);
+                let bw = extra.to_luma8();
+                Some(bw)
+            } else {
+                None
+            };
+
+            let out = build(
+                bw.as_bytes(),
+                &first_label,
+                &second_label,
+                extra.as_deref().map(EncodableLayout::as_bytes),
+            )?;
 
             write(args.outfile, out)?;
         }
-        Command::Extract { vram, num_chars } => {
+        Command::Extract {
+            vram,
+            num_chars,
+            extra_offset,
+        } => {
             let infile = read(args.infile)?;
-            let out = extract(&infile, vram, num_chars)?;
+            let (out, extra) = extract(&infile, vram, num_chars, extra_offset)?;
 
             image::save_buffer(
                 args.outfile,
                 &out,
                 8,
                 (out.len() / 8) as u32,
+                image::ColorType::L8,
+            )?;
+
+            image::save_buffer(
+                args.extra,
+                &extra,
+                8,
+                (extra.len() / 8) as u32,
                 image::ColorType::L8,
             )?;
         }
