@@ -215,8 +215,13 @@ where
                 instr = cursor.read_u32::<BE>()?;
                 instr != /* jr $s0 */ 0x02000008
             } {
+                let w = instr & 0xFC000000 == 0xAC000000;
                 let offset = instr & 0x0000FFFF;
-                pixels[(offset >> 1) as usize] = 0xFF;
+                if w {
+                    pixels[((offset >> 2) + 1) as usize] = 0x7F;
+                } else {
+                    pixels[(offset >> 1) as usize] = 0xFF;
+                }
             }
             Ok(Some(pixels.into_boxed_slice()))
         }
