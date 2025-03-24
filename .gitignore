@@ -1,3 +1,6 @@
 /target
 
 *.png
+*.s
+
+!/src/*.s
