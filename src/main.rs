@@ -114,7 +114,7 @@ fn build(data: &[u8], first_label: &str, second_label: &str) -> Result<String> {
 
     let mut char_rows = vec![];
 
-    for ch in data.chunks_exact(16 * 8) {
+    for ch in data.chunks_exact(8 * 8) {
         let mut buf = [0; 8];
         for (index, row) in ch.chunks_exact(8).enumerate() {
             let mut b = 0;
