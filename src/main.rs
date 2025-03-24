@@ -58,18 +58,18 @@ fn build_function(row: u8, double: bool) -> String {
     rv += &format!("    addi   a0, a0, {}\n", size_of::<u32>());
 
     for i in (0..u8::BITS).step_by(2) {
-        let pair = (row >> (u8::BITS - i - 1)) & 0b00000011;
+        let pair = (row >> (u8::BITS - i)) & 0b00000011;
         if double {
             match pair {
                 0b00 => {}
                 0b01 => {
-                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
-                }
-                0b10 => {
                     rv += &format!(
                         "    sh     s1, {}(a1)\n",
                         (i + 1) * size_of::<Pixel>() as u32
                     );
+                }
+                0b10 => {
+                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
                 }
                 0b11 => {
                     rv += &format!("    sw     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
@@ -80,13 +80,13 @@ fn build_function(row: u8, double: bool) -> String {
             match pair {
                 0b00 => {}
                 0b01 => {
-                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
-                }
-                0b10 => {
                     rv += &format!(
                         "    sh     s1, {}(a1)\n",
                         (i + 1) * size_of::<Pixel>() as u32
                     );
+                }
+                0b10 => {
+                    rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
                 }
                 0b11 => {
                     rv += &format!("    sh     s1, {}(a1)\n", i * size_of::<Pixel>() as u32);
